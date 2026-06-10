@@ -1,0 +1,35 @@
+low:
+  status: calibrated-first-pass
+  workload: job-first freshness pgbench
+  threads: 1
+  duration_seconds: 60
+  tps: 7.379156
+  latency_ms_avg: 135.516
+  latency_ms_stddev: 8.372
+  transactions: 443
+  evidence_run_dir: runs/20260531-003228-paper1-tp-only-low
+  interpretation: below the current standalone TP saturation knee and suitable as the low-pressure reference point.
+
+medium:
+  status: calibrated-first-pass
+  workload: job-first freshness pgbench
+  threads: 4
+  duration_seconds: 60
+  tps: 28.461227
+  latency_ms_avg: 140.516
+  latency_ms_stddev: 10.368
+  transactions: 1709
+  evidence_run_dir: runs/20260531-003413-paper1-tp-only-medium
+  interpretation: stable operating region with about 3.86x the low-tier throughput and only a modest latency increase.
+
+high:
+  status: calibrated-first-pass
+  workload: job-first freshness pgbench
+  threads: 8
+  duration_seconds: 60
+  tps: 57.902504
+  latency_ms_avg: 138.068
+  latency_ms_stddev: 9.806
+  transactions: 3480
+  evidence_run_dir: runs/20260531-003534-paper1-tp-only-high
+  interpretation: highest validated TP-only pressure in the current pg-like container profile and the current anchor for high-pressure mixed overlap.

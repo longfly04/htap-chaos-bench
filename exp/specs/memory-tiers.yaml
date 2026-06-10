@@ -1,0 +1,34 @@
+generous:
+  status: pending-calibration
+  evidence: not yet measured on the current GPU1 pg-like runtime.
+  next_step: add an explicit generous-memory manifest and capture AP-only evidence on the same JOB-first snapshot.
+
+moderate:
+  status: pending-calibration
+  evidence: not yet measured on the current GPU1 pg-like runtime.
+  next_step: add an explicit moderate-memory manifest and capture AP-only evidence on the same JOB-first snapshot.
+
+tight:
+  status: calibrated-first-pass
+  shared_buffers: 1GB
+  work_mem: 4MB
+  max_parallel_workers_per_gather: 4
+  temp_file_limit: unlimited
+  evidence_run_dirs:
+    sort-heavy: runs/20260531-003700-paper1-ap-only-sort-tight
+    hash-heavy: runs/20260531-004149-paper1-ap-only-hash-tight
+    mixed: runs/20260531-004321-paper1-ap-only-mixed-tight
+  ap_outcomes:
+    sort-heavy:
+      rounds_completed: 140
+      pg_stat_database_blks_read: 1
+      pg_stat_database_blks_hit: 39189324
+    hash-heavy:
+      rounds_completed: 42
+      pg_stat_database_blks_read: 22509898
+      pg_stat_database_blks_hit: 90435481
+    mixed:
+      rounds_completed: 33
+      pg_stat_database_blks_read: 18747348
+      pg_stat_database_blks_hit: 90842498
+  interpretation: under the current tight profile, sort-heavy remains almost fully cache-resident, while hash-heavy and mixed become much more read-intensive and complete far fewer rounds within the same 60-second window.

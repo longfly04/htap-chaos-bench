@@ -1,0 +1,42 @@
+ARG POSTGRES_BASE_IMAGE=docker.m.daocloud.io/library/postgres:17
+FROM ${POSTGRES_BASE_IMAGE}
+
+ARG PG_MAJOR=17
+ARG PG_EXTENSION_NAMES="pg_wait_sampling pgmeminfo system_stats pg_stat_kcache"
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    make \
+    gcc \
+    g++ \
+    pkg-config \
+    python3 \
+    python3-pip \
+    python3-venv \
+    postgresql-server-dev-${PG_MAJOR} \
+    postgresql-contrib-${PG_MAJOR} \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY extensions/pg_wait_sampling /tmp/extensions/pg_wait_sampling
+COPY extensions/pgmeminfo /tmp/extensions/pgmeminfo
+COPY extensions/system_stats /tmp/extensions/system_stats
+COPY extensions/pg_stat_kcache /tmp/extensions/pg_stat_kcache
+COPY extensions/pg_activity /tmp/extensions/pg_activity
+
+RUN grep -q '^#include <ctype.h>' /tmp/extensions/system_stats/misc.c \
+  || sed -i '1i#include <ctype.h>' /tmp/extensions/system_stats/misc.c
+
+RUN PG_CONFIG_BIN="$(command -v pg_config)" \
+  && for extension_name in ${PG_EXTENSION_NAMES}; do \
+    test -d "/tmp/extensions/${extension_name}" \
+    && test -f "/tmp/extensions/${extension_name}/Makefile" \
+    && make -C "/tmp/extensions/${extension_name}" USE_PGXS=1 PG_CONFIG="$PG_CONFIG_BIN" \
+    && make -C "/tmp/extensions/${extension_name}" USE_PGXS=1 PG_CONFIG="$PG_CONFIG_BIN" install; \
+  done \
+  && python3 -m venv /opt/pgactivity \
+  && /opt/pgactivity/bin/pip install --upgrade pip setuptools \
+  && /opt/pgactivity/bin/pip install "/tmp/extensions/pg_activity[psycopg]" \
+  && ln -sf /opt/pgactivity/bin/pg_activity /usr/local/bin/pg_activity \
+  && rm -rf /tmp/extensions

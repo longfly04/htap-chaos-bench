@@ -1,0 +1,98 @@
+services:
+  postgres:
+    build:
+      context: ${PGLAB_BUILD_CONTEXT}
+      dockerfile: ${PGLAB_DOCKERFILE}
+      args:
+        POSTGRES_BASE_IMAGE: ${POSTGRES_BASE_IMAGE}
+        PG_MAJOR: ${PG_MAJOR}
+    image: ${POSTGRES_IMAGE}
+    container_name: ${COMPOSE_PROJECT_NAME}-postgres
+    restart: unless-stopped
+    cpus: "${CGROUP_CPU_LIMIT}"
+    mem_limit: ${CGROUP_MEMORY_LIMIT}
+    mem_reservation: ${CGROUP_MEMORY_RESERVATION}
+    environment:
+      POSTGRES_USER: ${DB_SUPERUSER}
+      POSTGRES_PASSWORD: ${DB_SUPERUSER_PASSWORD}
+      POSTGRES_DB: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+      BENCH_USER: ${BENCH_USER}
+      BENCH_PASSWORD: ${BENCH_PASSWORD}
+      EXPORTER_USER: ${EXPORTER_USER}
+      EXPORTER_PASSWORD: ${EXPORTER_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS}
+      - -c
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE}
+      - -c
+      - work_mem=${POSTGRES_WORK_MEM}
+      - -c
+      - maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM}
+      - -c
+      - checkpoint_completion_target=${POSTGRES_CHECKPOINT_COMPLETION_TARGET}
+      - -c
+      - wal_buffers=${POSTGRES_WAL_BUFFERS}
+      - -c
+      - default_statistics_target=${POSTGRES_DEFAULT_STATISTICS_TARGET}
+      - -c
+      - random_page_cost=${POSTGRES_RANDOM_PAGE_COST}
+      - -c
+      - effective_io_concurrency=${POSTGRES_EFFECTIVE_IO_CONCURRENCY}
+      - -c
+      - huge_pages=${POSTGRES_HUGE_PAGES}
+      - -c
+      - jit=${POSTGRES_JIT}
+      - -c
+      - wal_compression=${POSTGRES_WAL_COMPRESSION}
+      - -c
+      - autovacuum_max_workers=${POSTGRES_AUTOVACUUM_MAX_WORKERS}
+      - -c
+      - min_wal_size=${POSTGRES_MIN_WAL_SIZE}
+      - -c
+      - max_wal_size=${POSTGRES_MAX_WAL_SIZE}
+      - -c
+      - max_worker_processes=${POSTGRES_MAX_WORKER_PROCESSES}
+      - -c
+      - max_parallel_workers_per_gather=${POSTGRES_MAX_PARALLEL_WORKERS_PER_GATHER}
+      - -c
+      - max_parallel_workers=${POSTGRES_MAX_PARALLEL_WORKERS}
+      - -c
+      - max_parallel_maintenance_workers=${POSTGRES_MAX_PARALLEL_MAINTENANCE_WORKERS}
+      - -c
+      - temp_file_limit=${POSTGRES_TEMP_FILE_LIMIT}
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS}
+      - -c
+      - log_temp_files=0
+      - -c
+      - logging_collector=off
+      - -c
+      - log_destination=stderr
+      - -c
+      - log_line_prefix=%m [%p] %q%u@%d
+      - -c
+      - shared_preload_libraries=${POSTGRES_SHARED_PRELOAD_LIBRARIES:-pg_stat_statements}
+      - -c
+      - track_io_timing=on
+      - -c
+      - track_functions=all
+      - -c
+      - track_activity_query_size=4096
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - htap_chaos_bench_pgdata:/var/lib/postgresql/data
+      - ../init:/docker-entrypoint-initdb.d:ro
+      - ../..:/workspace/htap-chaos-bench
+      - ../../runs:/workspace/runs
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_SUPERUSER} -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  htap_chaos_bench_pgdata:

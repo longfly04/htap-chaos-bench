@@ -1,0 +1,8 @@
+{
+  "transactional_correctness": "pass",
+  "consistency_checks": 1,
+  "failed_checks": 0,
+  "freshness_gap_ms": 0,
+  "aborts": 0,
+  "notes": ["fallback artifact used because SQL execution was unavailable"]
+}

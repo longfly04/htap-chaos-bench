@@ -1,0 +1,17 @@
+bin/
+runs/
+config/site.env
+pglab/compose/.env
+**/__pycache__/
+*.pyc
+*.log
+*.tmp
+exp/results/*
+!exp/results/.gitkeep
+notes/
+exp/datasets
+exp/manifests
+exp/results
+exp/scenarios
+exp/tmp
+exp/*.md

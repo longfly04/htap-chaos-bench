@@ -1,0 +1,23 @@
+L1:
+  status: calibrated-first-pass
+  variant: waitxact
+  lock_hold_seconds: 15
+  wait_duration_ms: 13238
+  recovered: true
+  manual_intervention_count: 0
+  post_chaos_unstable_window_ms: 1000
+  blocker_exit_code: 0
+  waiter_exit_code: 0
+  evidence_run_dir: runs/20260531-004003-paper1-lock-wait-baseline
+  snapshot_caveat: the severity anchor comes from measured wait duration and clean recovery; the current lock snapshot did not retain a granted=false row or a non-empty blocking tree sample.
+  interpretation: single blocker and single waiter on movie_freshness with automatic recovery after the blocker commits.
+
+L2:
+  status: pending-calibration
+  target_shape: stable waiting chain with visible blocked sessions.
+  next_step: extend the current waitxact path to 2 or more waiting sessions and preserve a non-empty blocking tree artifact.
+
+L3:
+  status: pending-calibration
+  target_shape: prolonged waiting tree with queue growth and larger recovery debt.
+  next_step: add a longer hold window and a multi-waiter queue so the blocking tree remains visible throughout the observation window.
