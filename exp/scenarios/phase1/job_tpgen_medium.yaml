@@ -1,0 +1,28 @@
+system: pg-like
+dataset: job
+snapshot: job-first-imdb-v0
+budget_tier: moderate
+tp:
+  profile: generated
+  concurrency: 4
+  terminals: 4
+  rate_cap: 0
+  intensity:
+    batch_size: 128
+  skew:
+    mode: hotspot
+    hot_modulus: 64
+    hot_remainder: 1
+  burst:
+    mode: steady
+chaos:
+  mode: none
+drift:
+  data_factor: 0.0
+  workload_factor: 0.0
+observe:
+  export_pg_stats: true
+validate:
+  consistency: true
+  recovery: true
+seed: 1

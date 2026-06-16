@@ -389,3 +389,93 @@ func TestValidateSpillPressureRequiresSessionMemory(t *testing.T) {
 		t.Fatalf("Validate() error = nil, want spill_pressure session_memory validation error")
 	}
 }
+
+func TestValidateThermalScenario(t *testing.T) {
+	s := Scenario{
+		System:   "pg-like",
+		Dataset:  "job",
+		Snapshot: "snap-1",
+		Budget:   "moderate",
+		TP: TPConfig{
+			Profile:     "generated",
+			Concurrency: 4,
+			Terminals:   4,
+			RateCap:     0,
+			Intensity:   TPIntensity{BatchSize: 128},
+			Skew:        TPSkew{Mode: "hotspot", HotModulus: 64, HotRemainder: 1},
+			Burst:       TPBurst{Mode: "steady"},
+		},
+		AP: APConfig{
+			Class:                "sort-heavy",
+			Arrival:              "tp-first",
+			Terminals:            1,
+			BurstIntervalSeconds: 5,
+		},
+		Thermal: ThermalConfig{
+			Enabled:           true,
+			Profile:           "steady-to-burst",
+			Model:             "table-temperature",
+			PrimaryStateTable: "movie_freshness",
+			Ambient: ThermalAmbientConfig{
+				Baseline:         0.2,
+				CoolingRate:      0.1,
+				ObservationStepS: 5,
+				HorizonS:         60,
+			},
+			Intent: ThermalIntentConfig{
+				SteadyState:       "warm",
+				TransientState:    "heating",
+				TargetTemperature: 0.8,
+				DriftRate:         0.2,
+				HeatBudget:        1.2,
+			},
+			Tables: []ThermalTableConfig{{
+				Name:               "movie_freshness",
+				Role:               "hotspot-anchor",
+				InitialTemperature: 0.3,
+				TargetTemperature:  0.9,
+				HeatCapacity:       1.0,
+				AccessWeight:       1.0,
+				IOWeight:           0.4,
+				Coupling:           0.2,
+			}},
+		},
+		Chaos: ChaosConfig{Mode: "none"},
+		Drift: DriftConfig{DataFactor: 0, WorkloadFactor: 0},
+		Seed:  1,
+	}
+
+	if err := s.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
+	}
+}
+
+func TestValidateThermalScenarioRequiresTables(t *testing.T) {
+	s := Scenario{
+		System:   "pg-like",
+		Dataset:  "job",
+		Snapshot: "snap-1",
+		Budget:   "moderate",
+		TP: TPConfig{
+			Profile:     "generated",
+			Concurrency: 4,
+			Terminals:   4,
+			RateCap:     0,
+			Intensity:   TPIntensity{BatchSize: 128},
+			Skew:        TPSkew{Mode: "hotspot", HotModulus: 64, HotRemainder: 1},
+			Burst:       TPBurst{Mode: "steady"},
+		},
+		Thermal: ThermalConfig{
+			Enabled: true,
+			Profile: "steady-to-burst",
+			Model:   "table-temperature",
+		},
+		Chaos: ChaosConfig{Mode: "none"},
+		Drift: DriftConfig{DataFactor: 0, WorkloadFactor: 0},
+		Seed:  1,
+	}
+
+	if err := s.Validate(); err == nil {
+		t.Fatalf("Validate() error = nil, want thermal tables validation error")
+	}
+}

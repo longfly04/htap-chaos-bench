@@ -83,6 +83,38 @@ type SyncLatencyProfile struct {
 	Status           string `json:"status"`
 }
 
+type ThermalProfile struct {
+	Enabled             bool                  `json:"enabled"`
+	Profile             string                `json:"profile"`
+	Model               string                `json:"model"`
+	PrimaryStateTable   string                `json:"primary_state_table"`
+	AmbientBaseline     float64               `json:"ambient_baseline"`
+	CoolingRate         float64               `json:"cooling_rate"`
+	ObservationStepS    int                   `json:"observation_step_seconds"`
+	HorizonS            int                   `json:"horizon_seconds"`
+	SteadyState         string                `json:"steady_state"`
+	TransientState      string                `json:"transient_state"`
+	TargetTemperature   float64               `json:"target_temperature"`
+	DriftRate           float64               `json:"drift_rate"`
+	HeatBudget          float64               `json:"heat_budget"`
+	TableCount          int                   `json:"table_count"`
+	TracePath           string                `json:"trace_path"`
+	TableProfilePath    string                `json:"table_profile_path"`
+	Tables              []ThermalTableProfile `json:"tables"`
+	Status              string                `json:"status"`
+}
+
+type ThermalTableProfile struct {
+	Name               string  `json:"name"`
+	Role               string  `json:"role"`
+	InitialTemperature float64 `json:"initial_temperature"`
+	TargetTemperature  float64 `json:"target_temperature"`
+	HeatCapacity       float64 `json:"heat_capacity"`
+	AccessWeight       float64 `json:"access_weight"`
+	IOWeight           float64 `json:"io_weight"`
+	Coupling           float64 `json:"coupling"`
+}
+
 type ChaosProfile struct {
 	Mode              string                 `json:"mode"`
 	Stage             string                 `json:"stage"`
@@ -135,19 +167,20 @@ type CardinalityProfile struct {
 }
 
 type ResolvedScenario struct {
-	RunID         string                `json:"run_id"`
-	System        string                `json:"system"`
-	Dataset       string                `json:"dataset"`
-	Snapshot      string                `json:"snapshot"`
-	BudgetTier    string                `json:"budget_tier"`
-	Seed          int                   `json:"seed"`
-	TP            TPProfile             `json:"tp"`
-	AP            *APProfile            `json:"ap,omitempty"`
-	HTAPCheck     *HTAPCheckProfile     `json:"htap_check,omitempty"`
-	Freshness     *FreshnessProfile     `json:"freshness,omitempty"`
-	SyncLatency   *SyncLatencyProfile   `json:"sync_latency,omitempty"`
+	RunID         string                      `json:"run_id"`
+	System        string                      `json:"system"`
+	Dataset       string                      `json:"dataset"`
+	Snapshot      string                      `json:"snapshot"`
+	BudgetTier    string                      `json:"budget_tier"`
+	Seed          int                         `json:"seed"`
+	TP            TPProfile                   `json:"tp"`
+	AP            *APProfile                  `json:"ap,omitempty"`
+	Thermal       *ThermalProfile             `json:"thermal,omitempty"`
+	HTAPCheck     *HTAPCheckProfile           `json:"htap_check,omitempty"`
+	Freshness     *FreshnessProfile           `json:"freshness,omitempty"`
+	SyncLatency   *SyncLatencyProfile         `json:"sync_latency,omitempty"`
 	WorkloadDrift *WorkloadDriftProfile       `json:"workload_drift,omitempty"`
-	DataDrift     *driftpkg.DataDriftProfile `json:"data_drift,omitempty"`
+	DataDrift     *driftpkg.DataDriftProfile  `json:"data_drift,omitempty"`
 	Chaos         *ChaosProfile               `json:"chaos,omitempty"`
 	CleanupPolicy *chaospkg.CleanupPolicy     `json:"cleanup_policy,omitempty"`
 	Raw           scenario.Scenario           `json:"raw"`
@@ -267,6 +300,10 @@ func MaterializeTP(request MaterializeRequest) error {
 		if parsed := driftpkg.ParseFeatureScope(request.Manifest.Get("DRIFT_FEATURE_SCOPE")); len(parsed) > 0 {
 			featureScope = parsed
 		}
+	}
+	thermalProfile, err := materializeThermalProfile(request.Scenario.Thermal, derivedDir)
+	if err != nil {
+		return err
 	}
 	cleanupProfile := strings.TrimSpace(manifestStringOrEnv(request.Manifest, "CHAOS_CLEANUP_PROFILE", "pg-default"))
 	safetyLevel := strings.TrimSpace(manifestStringOrEnv(request.Manifest, "CHAOS_SAFETY_LEVEL", "mainline"))
@@ -625,6 +662,7 @@ func MaterializeTP(request MaterializeRequest) error {
 		Seed:          seed,
 		TP:            profile,
 		AP:            apProfile,
+		Thermal:       thermalProfile,
 		HTAPCheck:     htapCheckProfile,
 		Freshness:     freshnessProfile,
 		SyncLatency:   syncLatencyProfile,
@@ -643,6 +681,11 @@ func MaterializeTP(request MaterializeRequest) error {
 	}
 	if apProfile != nil {
 		if err := writeJSON(filepath.Join(derivedDir, "ap-profile.json"), apProfile); err != nil {
+			return err
+		}
+	}
+	if thermalProfile != nil {
+		if err := writeJSON(filepath.Join(derivedDir, "thermal-profile.json"), thermalProfile); err != nil {
 			return err
 		}
 	}
@@ -703,6 +746,15 @@ func MaterializeTP(request MaterializeRequest) error {
 		"WORKLOAD_OVERLAP":              apArrival,
 		"AP_BURST_INTERVAL_SECONDS":     fmt.Sprintf("%d", apBurstInterval),
 		"EXPORT_PG_STATS":               fmt.Sprintf("%t", exportPGStats),
+		"THERMAL_ENABLED":               fmt.Sprintf("%t", thermalProfile != nil),
+		"THERMAL_PROFILE":               thermalValue(thermalProfile, func(profile *ThermalProfile) string { return profile.Profile }),
+		"THERMAL_MODEL":                 thermalValue(thermalProfile, func(profile *ThermalProfile) string { return profile.Model }),
+		"THERMAL_PRIMARY_TABLE":         thermalValue(thermalProfile, func(profile *ThermalProfile) string { return profile.PrimaryStateTable }),
+		"THERMAL_TARGET_TEMPERATURE":    thermalValue(thermalProfile, func(profile *ThermalProfile) string { return formatFloat(profile.TargetTemperature) }),
+		"THERMAL_TRANSIENT_STATE":       thermalValue(thermalProfile, func(profile *ThermalProfile) string { return profile.TransientState }),
+		"THERMAL_STEADY_STATE":          thermalValue(thermalProfile, func(profile *ThermalProfile) string { return profile.SteadyState }),
+		"THERMAL_TRACE_PATH":            thermalValue(thermalProfile, func(profile *ThermalProfile) string { return profile.TracePath }),
+		"THERMAL_TABLE_PROFILE_PATH":    thermalValue(thermalProfile, func(profile *ThermalProfile) string { return profile.TableProfilePath }),
 			"OBSERVE_SAMPLING_INTERVAL_SECONDS": fmt.Sprintf("%d", observeSamplingIntervalSeconds),
 			"OBSERVE_METRICS_PROFILE":       observeMetricsProfile,
 			"AUTO_RENDER_PLOTS":             fmt.Sprintf("%t", autoRenderPlots),
@@ -790,6 +842,15 @@ func writeEnv(path string, values map[string]string) error {
 		"WORKLOAD_OVERLAP",
 		"AP_BURST_INTERVAL_SECONDS",
 		"EXPORT_PG_STATS",
+		"THERMAL_ENABLED",
+		"THERMAL_PROFILE",
+		"THERMAL_MODEL",
+		"THERMAL_PRIMARY_TABLE",
+		"THERMAL_TARGET_TEMPERATURE",
+		"THERMAL_TRANSIENT_STATE",
+		"THERMAL_STEADY_STATE",
+		"THERMAL_TRACE_PATH",
+		"THERMAL_TABLE_PROFILE_PATH",
 			"OBSERVE_SAMPLING_INTERVAL_SECONDS",
 			"OBSERVE_METRICS_PROFILE",
 			"AUTO_RENDER_PLOTS",
@@ -877,6 +938,73 @@ func workloadDriftValue(profile *WorkloadDriftProfile, getter func(*WorkloadDrif
 		return ""
 	}
 	return getter(profile)
+}
+
+func thermalValue(profile *ThermalProfile, getter func(*ThermalProfile) string) string {
+	if profile == nil {
+		return ""
+	}
+	return getter(profile)
+}
+
+func materializeThermalProfile(cfg scenario.ThermalConfig, derivedDir string) (*ThermalProfile, error) {
+	if !cfg.Enabled {
+		return nil, nil
+	}
+	observationStep := cfg.Ambient.ObservationStepS
+	if observationStep <= 0 {
+		observationStep = 5
+	}
+	horizon := cfg.Ambient.HorizonS
+	if horizon <= 0 {
+		horizon = 60
+	}
+	thermalTables := make([]ThermalTableProfile, 0, len(cfg.Tables))
+	for _, table := range cfg.Tables {
+		thermalTables = append(thermalTables, ThermalTableProfile{
+			Name:               table.Name,
+			Role:               table.Role,
+			InitialTemperature: table.InitialTemperature,
+			TargetTemperature:  table.TargetTemperature,
+			HeatCapacity:       table.HeatCapacity,
+			AccessWeight:       table.AccessWeight,
+			IOWeight:           table.IOWeight,
+			Coupling:           table.Coupling,
+		})
+	}
+	traceLines := []string{"time_seconds,table,temperature,access_heat,io_heat,coupling_flux,error"}
+	for _, table := range thermalTables {
+		traceLines = append(traceLines, fmt.Sprintf("0,%s,%s,%s,%s,%s,0", table.Name, formatFloat(table.InitialTemperature), formatFloat(table.AccessWeight), formatFloat(table.IOWeight), formatFloat(table.Coupling)))
+		traceLines = append(traceLines, fmt.Sprintf("%d,%s,%s,%s,%s,%s,0", horizon, table.Name, formatFloat(table.TargetTemperature), formatFloat(table.AccessWeight), formatFloat(table.IOWeight), formatFloat(table.Coupling)))
+	}
+	tracePath := filepath.Join(derivedDir, "thermal-temperature-trace.csv")
+	if err := os.WriteFile(tracePath, []byte(strings.Join(traceLines, "\n")+"\n"), 0o644); err != nil {
+		return nil, err
+	}
+	tableProfilePath := filepath.Join(derivedDir, "table-temperature-profile.json")
+	if err := writeJSON(tableProfilePath, thermalTables); err != nil {
+		return nil, err
+	}
+	return &ThermalProfile{
+		Enabled:           true,
+		Profile:           cfg.Profile,
+		Model:             cfg.Model,
+		PrimaryStateTable: cfg.PrimaryStateTable,
+		AmbientBaseline:   cfg.Ambient.Baseline,
+		CoolingRate:       cfg.Ambient.CoolingRate,
+		ObservationStepS:  observationStep,
+		HorizonS:          horizon,
+		SteadyState:       cfg.Intent.SteadyState,
+		TransientState:    cfg.Intent.TransientState,
+		TargetTemperature: cfg.Intent.TargetTemperature,
+		DriftRate:         cfg.Intent.DriftRate,
+		HeatBudget:        cfg.Intent.HeatBudget,
+		TableCount:        len(thermalTables),
+		TracePath:         "derived/thermal-temperature-trace.csv",
+		TableProfilePath:  "derived/table-temperature-profile.json",
+		Tables:            thermalTables,
+		Status:            "materialized",
+	}, nil
 }
 
 func manifestStringOrEnv(manifest benchruntime.Manifest, key string, fallback string) string {

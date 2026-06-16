@@ -1,0 +1,51 @@
+system: pg-like
+dataset: job
+snapshot: job-first-imdb-v0
+budget_tier: moderate
+tp:
+  profile: generated
+  concurrency: 4
+  terminals: 4
+  rate_cap: 0
+  intensity:
+    batch_size: 128
+  skew:
+    mode: hotspot
+    hot_modulus: 64
+    hot_remainder: 1
+  burst:
+    mode: steady
+ap:
+  class: sort-heavy
+  arrival: repeated-burst
+  terminals: 1
+  parallelism: 0
+  burst_interval_seconds: 4
+htap_check:
+  enabled: true
+  type: query-oriented
+chaos:
+  mode: single-fault
+  stage: mixed-steady-state
+  start_after_seconds: 30
+  duration_seconds: 40
+  seed: 1
+  injections:
+    - id: cross_update_deadlock_l3
+      family: lock-path
+      primitive: deadlock_pair
+      env_index: 1
+      env_jobs: 1
+      target_selector: fixture_rows:2
+      intensity: L3
+      params:
+        jobs: 1
+drift:
+  data_factor: 0.0
+  workload_factor: 0.0
+observe:
+  export_pg_stats: true
+validate:
+  consistency: true
+  recovery: true
+seed: 1

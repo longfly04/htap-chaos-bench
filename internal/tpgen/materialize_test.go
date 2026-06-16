@@ -1052,3 +1052,148 @@ func TestMaterializeTPWritesSpillChaosProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestMaterializeTPWritesThermalProfile(t *testing.T) {
+	datasetRoot := t.TempDir()
+	runDir := filepath.Join(t.TempDir(), "run-thermal")
+	if err := os.MkdirAll(filepath.Join(datasetRoot, "tp", "seeds"), 0o755); err != nil {
+		t.Fatalf("mkdir seed dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(runDir, "derived"), 0o755); err != nil {
+		t.Fatalf("mkdir run dir: %v", err)
+	}
+
+	datasetYAML := "dataset_id: job\nsnapshot_id: snap-1\nschema_graph_source: schema\nstats_source: stats\ntp_seed_dir: tp/seeds\nhot_object_rules: movie_freshness modulo hotspot on movie_id\nfreshness_probe: probes/freshness.sql\n"
+	if err := os.WriteFile(filepath.Join(datasetRoot, "dataset.yaml"), []byte(datasetYAML), 0o644); err != nil {
+		t.Fatalf("write dataset.yaml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(datasetRoot, "tp", "seeds", "seed1.sql"), []byte("SELECT 1;\n"), 0o644); err != nil {
+		t.Fatalf("write seed sql: %v", err)
+	}
+
+	pack, err := dataset.LoadPack(datasetRoot)
+	if err != nil {
+		t.Fatalf("load pack: %v", err)
+	}
+	manifest := benchruntime.Manifest{Values: map[string]string{
+		"RUN_ID":      "run-thermal",
+		"TP_PRESSURE": "medium",
+		"SEED":        "10",
+	}}
+	spec := scenario.Scenario{
+		System:   "pg-like",
+		Dataset:  "job",
+		Snapshot: "snap-1",
+		Budget:   "moderate",
+		TP: scenario.TPConfig{
+			Profile:     "generated",
+			Concurrency: 4,
+			Terminals:   4,
+			RateCap:     0,
+			Intensity:   scenario.TPIntensity{BatchSize: 128},
+			Skew:        scenario.TPSkew{Mode: "hotspot", HotModulus: 64, HotRemainder: 1},
+			Burst:       scenario.TPBurst{Mode: "steady"},
+		},
+		Thermal: scenario.ThermalConfig{
+			Enabled:           true,
+			Profile:           "steady-to-burst",
+			Model:             "table-temperature",
+			PrimaryStateTable: "movie_freshness",
+			Ambient: scenario.ThermalAmbientConfig{
+				Baseline:         0.2,
+				CoolingRate:      0.1,
+				ObservationStepS: 5,
+				HorizonS:         60,
+			},
+			Intent: scenario.ThermalIntentConfig{
+				SteadyState:       "warm",
+				TransientState:    "heating",
+				TargetTemperature: 0.8,
+				DriftRate:         0.15,
+				HeatBudget:        1.3,
+			},
+			Tables: []scenario.ThermalTableConfig{{
+				Name:               "movie_freshness",
+				Role:               "hotspot-anchor",
+				InitialTemperature: 0.3,
+				TargetTemperature:  0.9,
+				HeatCapacity:       1.0,
+				AccessWeight:       1.0,
+				IOWeight:           0.4,
+				Coupling:           0.2,
+			}},
+		},
+		Chaos: scenario.ChaosConfig{Mode: "none"},
+		Drift: scenario.DriftConfig{DataFactor: 0, WorkloadFactor: 0},
+		Seed:  10,
+	}
+
+	if err := MaterializeTP(MaterializeRequest{
+		Manifest:    manifest,
+		Scenario:    spec,
+		DatasetPack: pack,
+		DatasetRoot: datasetRoot,
+		RunDir:      runDir,
+	}); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+
+	var thermalProfile ThermalProfile
+	thermalBytes, err := os.ReadFile(filepath.Join(runDir, "derived", "thermal-profile.json"))
+	if err != nil {
+		t.Fatalf("read thermal profile: %v", err)
+	}
+	if err := json.Unmarshal(thermalBytes, &thermalProfile); err != nil {
+		t.Fatalf("unmarshal thermal profile: %v", err)
+	}
+	if !thermalProfile.Enabled {
+		t.Fatalf("thermal enabled = false, want true")
+	}
+	if thermalProfile.Profile != "steady-to-burst" {
+		t.Fatalf("thermal profile = %q, want steady-to-burst", thermalProfile.Profile)
+	}
+	if thermalProfile.Model != "table-temperature" {
+		t.Fatalf("thermal model = %q, want table-temperature", thermalProfile.Model)
+	}
+	if thermalProfile.TracePath != "derived/thermal-temperature-trace.csv" {
+		t.Fatalf("thermal trace path = %q, want derived/thermal-temperature-trace.csv", thermalProfile.TracePath)
+	}
+	if thermalProfile.TableProfilePath != "derived/table-temperature-profile.json" {
+		t.Fatalf("thermal table profile path = %q, want derived/table-temperature-profile.json", thermalProfile.TableProfilePath)
+	}
+	if thermalProfile.TableCount != 1 {
+		t.Fatalf("thermal table count = %d, want 1", thermalProfile.TableCount)
+	}
+
+	traceBytes, err := os.ReadFile(filepath.Join(runDir, "derived", "thermal-temperature-trace.csv"))
+	if err != nil {
+		t.Fatalf("read thermal trace: %v", err)
+	}
+	traceText := string(traceBytes)
+	if !strings.Contains(traceText, "time_seconds,table,temperature,access_heat,io_heat,coupling_flux,error") {
+		t.Fatalf("thermal trace missing header")
+	}
+	if !strings.Contains(traceText, "movie_freshness") {
+		t.Fatalf("thermal trace missing table row")
+	}
+
+	envBytes, err := os.ReadFile(filepath.Join(runDir, "derived", "tp-profile.env"))
+	if err != nil {
+		t.Fatalf("read env: %v", err)
+	}
+	envText := string(envBytes)
+	for _, expected := range []string{
+		"THERMAL_ENABLED=true\n",
+		"THERMAL_PROFILE=steady-to-burst\n",
+		"THERMAL_MODEL=table-temperature\n",
+		"THERMAL_PRIMARY_TABLE=movie_freshness\n",
+		"THERMAL_TRANSIENT_STATE=heating\n",
+		"THERMAL_STEADY_STATE=warm\n",
+		"THERMAL_TRACE_PATH=derived/thermal-temperature-trace.csv\n",
+		"THERMAL_TABLE_PROFILE_PATH=derived/table-temperature-profile.json\n",
+	} {
+		if !strings.Contains(envText, expected) {
+			t.Fatalf("expected env to contain %q, got %q", expected, envText)
+		}
+	}
+}

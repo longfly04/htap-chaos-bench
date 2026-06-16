@@ -6,12 +6,8 @@ pglab/compose/.env
 *.pyc
 *.log
 *.tmp
-exp/results/*
-!exp/results/.gitkeep
-notes/
-exp/datasets
+exp/results/
+exp/results/.gitkeep
+exp/datasets/*
 exp/manifests
-exp/results
-exp/scenarios
-exp/tmp
-exp/*.md
+exp/tmp/

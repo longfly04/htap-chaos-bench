@@ -7,6 +7,7 @@ type Scenario struct {
 	Budget     string          `yaml:"budget_tier" json:"budget_tier"`
 	TP         TPConfig        `yaml:"tp" json:"tp"`
 	AP         APConfig        `yaml:"ap" json:"ap"`
+	Thermal    ThermalConfig   `yaml:"thermal" json:"thermal"`
 	HTAPCheck  HTAPCheckConfig `yaml:"htap_check" json:"htap_check"`
 	Chaos      ChaosConfig     `yaml:"chaos" json:"chaos"`
 	Drift      DriftConfig     `yaml:"drift" json:"drift"`
@@ -46,6 +47,42 @@ type APConfig struct {
 	Terminals            int    `yaml:"terminals" json:"terminals"`
 	Parallelism          int    `yaml:"parallelism" json:"parallelism"`
 	BurstIntervalSeconds int    `yaml:"burst_interval_seconds" json:"burst_interval_seconds"`
+}
+
+type ThermalConfig struct {
+	Enabled           bool                 `yaml:"enabled" json:"enabled"`
+	Profile           string               `yaml:"profile" json:"profile"`
+	Model             string               `yaml:"model" json:"model"`
+	PrimaryStateTable string               `yaml:"primary_state_table" json:"primary_state_table"`
+	Ambient           ThermalAmbientConfig `yaml:"ambient" json:"ambient"`
+	Intent            ThermalIntentConfig  `yaml:"intent" json:"intent"`
+	Tables            []ThermalTableConfig `yaml:"tables" json:"tables"`
+}
+
+type ThermalAmbientConfig struct {
+	Baseline         float64 `yaml:"baseline" json:"baseline"`
+	CoolingRate      float64 `yaml:"cooling_rate" json:"cooling_rate"`
+	ObservationStepS int     `yaml:"observation_step_seconds" json:"observation_step_seconds"`
+	HorizonS         int     `yaml:"horizon_seconds" json:"horizon_seconds"`
+}
+
+type ThermalIntentConfig struct {
+	SteadyState       string  `yaml:"steady_state" json:"steady_state"`
+	TransientState    string  `yaml:"transient_state" json:"transient_state"`
+	TargetTemperature float64 `yaml:"target_temperature" json:"target_temperature"`
+	DriftRate         float64 `yaml:"drift_rate" json:"drift_rate"`
+	HeatBudget        float64 `yaml:"heat_budget" json:"heat_budget"`
+}
+
+type ThermalTableConfig struct {
+	Name              string  `yaml:"name" json:"name"`
+	Role              string  `yaml:"role" json:"role"`
+	InitialTemperature float64 `yaml:"initial_temperature" json:"initial_temperature"`
+	TargetTemperature  float64 `yaml:"target_temperature" json:"target_temperature"`
+	HeatCapacity       float64 `yaml:"heat_capacity" json:"heat_capacity"`
+	AccessWeight       float64 `yaml:"access_weight" json:"access_weight"`
+	IOWeight           float64 `yaml:"io_weight" json:"io_weight"`
+	Coupling           float64 `yaml:"coupling" json:"coupling"`
 }
 
 type HTAPCheckConfig struct {
@@ -89,7 +126,7 @@ type DriftConfig struct {
 }
 
 type ObserveConfig struct {
-	ExportPGStats          bool   `yaml:"export_pg_stats" json:"export_pg_stats"`
+	ExportPGStats           bool   `yaml:"export_pg_stats" json:"export_pg_stats"`
 	SamplingIntervalSeconds int    `yaml:"sampling_interval_seconds" json:"sampling_interval_seconds"`
 	MetricsProfile          string `yaml:"metrics_profile" json:"metrics_profile"`
 	RenderPlots             bool   `yaml:"render_plots" json:"render_plots"`

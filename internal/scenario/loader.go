@@ -83,6 +83,9 @@ func (s Scenario) Validate() error {
 			return fmt.Errorf("scenario.ap.arrival is invalid: %s", s.AP.Arrival)
 		}
 	}
+	if err := validateThermalConfig(s.Thermal); err != nil {
+		return err
+	}
 	if s.HTAPCheck.Enabled && strings.TrimSpace(s.HTAPCheck.Type) == "" {
 		return fmt.Errorf("scenario.htap_check.type is required when htap_check.enabled is true")
 	}
@@ -189,6 +192,63 @@ func (s Scenario) Validate() error {
 			if injection.Params.Rate <= 0 {
 				return fmt.Errorf("scenario.chaos.spill_pressure.params.rate must be > 0")
 			}
+		}
+	}
+	return nil
+}
+
+func validateThermalConfig(cfg ThermalConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(cfg.Profile) == "" {
+		return fmt.Errorf("scenario.thermal.profile is required when thermal.enabled is true")
+	}
+	if strings.TrimSpace(cfg.Model) == "" {
+		return fmt.Errorf("scenario.thermal.model is required when thermal.enabled is true")
+	}
+	if cfg.Ambient.ObservationStepS < 0 {
+		return fmt.Errorf("scenario.thermal.ambient.observation_step_seconds must be >= 0")
+	}
+	if cfg.Ambient.HorizonS < 0 {
+		return fmt.Errorf("scenario.thermal.ambient.horizon_seconds must be >= 0")
+	}
+	if cfg.Ambient.CoolingRate < 0 {
+		return fmt.Errorf("scenario.thermal.ambient.cooling_rate must be >= 0")
+	}
+	if cfg.Intent.TargetTemperature < 0 {
+		return fmt.Errorf("scenario.thermal.intent.target_temperature must be >= 0")
+	}
+	if cfg.Intent.DriftRate < 0 {
+		return fmt.Errorf("scenario.thermal.intent.drift_rate must be >= 0")
+	}
+	if cfg.Intent.HeatBudget < 0 {
+		return fmt.Errorf("scenario.thermal.intent.heat_budget must be >= 0")
+	}
+	if len(cfg.Tables) == 0 {
+		return fmt.Errorf("scenario.thermal.tables must not be empty when thermal.enabled is true")
+	}
+	for _, table := range cfg.Tables {
+		if strings.TrimSpace(table.Name) == "" {
+			return fmt.Errorf("scenario.thermal.table.name is required")
+		}
+		if table.InitialTemperature < 0 {
+			return fmt.Errorf("scenario.thermal.table.initial_temperature must be >= 0")
+		}
+		if table.TargetTemperature < 0 {
+			return fmt.Errorf("scenario.thermal.table.target_temperature must be >= 0")
+		}
+		if table.HeatCapacity < 0 {
+			return fmt.Errorf("scenario.thermal.table.heat_capacity must be >= 0")
+		}
+		if table.AccessWeight < 0 {
+			return fmt.Errorf("scenario.thermal.table.access_weight must be >= 0")
+		}
+		if table.IOWeight < 0 {
+			return fmt.Errorf("scenario.thermal.table.io_weight must be >= 0")
+		}
+		if table.Coupling < 0 {
+			return fmt.Errorf("scenario.thermal.table.coupling must be >= 0")
 		}
 	}
 	return nil

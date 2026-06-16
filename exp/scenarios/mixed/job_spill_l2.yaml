@@ -1,0 +1,56 @@
+system: pg-like
+dataset: job
+snapshot: job-first-imdb-v0
+budget_tier: moderate
+tp:
+  profile: generated
+  concurrency: 4
+  terminals: 4
+  rate_cap: 0
+  intensity:
+    batch_size: 128
+  skew:
+    mode: hotspot
+    hot_modulus: 64
+    hot_remainder: 1
+  burst:
+    mode: steady
+ap:
+  class: sort-heavy
+  arrival: repeated-burst
+  terminals: 1
+  parallelism: 0
+  burst_interval_seconds: 4
+htap_check:
+  enabled: true
+  type: query-oriented
+chaos:
+  mode: single-fault
+  stage: mixed-steady-state
+  start_after_seconds: 30
+  duration_seconds: 40
+  seed: 1
+  injections:
+    - id: spill_sort_l2
+      family: memory-path
+      primitive: spill_pressure
+      env_index: 1
+      env_workers: 4
+      env_session_memory: 32kB
+      env_rate: 2.0
+      env_spill_query_class: sort-heavy
+      target_selector: ap_query_class:sort-heavy
+      intensity: L2
+      params:
+        workers: 4
+        session_memory: 32kB
+        rate: 2.0
+drift:
+  data_factor: 0.0
+  workload_factor: 0.0
+observe:
+  export_pg_stats: true
+validate:
+  consistency: true
+  recovery: true
+seed: 1
